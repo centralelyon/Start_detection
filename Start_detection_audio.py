@@ -16,12 +16,15 @@ import json
 
 import matplotlib.pyplot as plt
 import cupy as cp
-from scipy.signal import butter, lfilter, freqz, find_peaks
+from scipy.signal import butter, lfilter, freqz, find_peaks,correlation_lags,correlate
 
 import time
 
 import pyAnalysismodifie as pam
 
+import ffmpeg
+from ffmpeg import Error
+import requests
 #filtrage numérique
 
 def butter_lowpass(cutoff, fs, order=3):#filtre passe bas
@@ -187,7 +190,7 @@ def extract_time_start_naif(video,bip_ref_path="ref_bip_isolated.wav"):
     
     return(np.argmax(np.absolute(signal))/fs)
     
-def synchro_videos(video_path1,video_path2):
+def synchro_videos(video_path1,video_path2):#calcul le retard de video1 sur video2
     fs = 44100
     
     audioclip1 = mp.AudioFileClip(video_path1)
@@ -195,11 +198,15 @@ def synchro_videos(video_path1,video_path2):
     
     audioclip2 = mp.AudioFileClip(video_path2)
     signal2 = audioclip2.to_soundarray(fps = fs)[:,0]
+
+
+    corr = correlate(signal1,signal2,'full')
+    lags = correlation_lags(signal1.size, signal2.size, mode="full")
     
-    if len(signal1) >= len(signal2):
-        return(float(cp.argmax(cp.correlate(cp.array(signal1),cp.array(signal2)))/fs))
-    else:
-        return(float(cp.argmax(cp.correlate(cp.array(signal2),cp.array(signal1)))/fs))
+    return(lags[np.argmax(corr)]/fs)
+    
+    
+
     
 
 def fenetres(signali, s_ref, filtrage = True,fs = 44100,plot_peaks = False):
@@ -207,7 +214,8 @@ def fenetres(signali, s_ref, filtrage = True,fs = 44100,plot_peaks = False):
     if filtrage:
         s_ref = butter_bandpass_filter(s_ref,870, 1100, fs, order=3)#filtrage du bruit de référence. On le cherche dans le signal filtré
         signal = butter_bandpass_filter(signali,870, 1100, fs, order=3)#filtrage du signal
-        
+    else:
+        signal = signali
 
     signal= cp.array(signal)#passage sur carte graphique
 
@@ -245,7 +253,7 @@ def extract_time_start2(video,model_type,bip_ref_path="ref_bip_isolated.wav",fil
     temp = []
     
     for peak in peaks:
-        temp.append(pam.file_classification(fs,signal[peak-100:peak + int(0.3*fs)], model_type+"StartDetector",model_type)[1][0])
+        temp.append(pam.file_classification(fs,signal[max(0,peak-100):min(len(signal),peak + int(0.3*fs))], model_type+"StartDetector",model_type)[1][0])
     start_time = peaks[np.argmax(temp)]/fs
     
     if plot_scores:
@@ -259,18 +267,51 @@ def extract_time_start2(video,model_type,bip_ref_path="ref_bip_isolated.wav",fil
 def genererModele(list_classes,model_type,folder):
     aT.extract_features_and_train(list_classes, 1.0, 1.0, aT.shortTermWindow, aT.shortTermStep,model_type,folder + '/'+model_type+"StartDetector", False)
     
-    
+class ffmpegProcessor:
+    def __init__(self):
+        self.cmd = '/usr/bin/ffmpeg'
 
+    def extract_audio(self, filename):
+        try:
+            out, err = (
+                ffmpeg
+                    .input(filename)
+                    .output('-', format='f32le', acodec='pcm_f32le', ac=1, ar='44100')
+                    .run(cmd=self.cmd, capture_stdout=True, capture_stderr=True)
+            )
+        except Error as err:
+            print(err.stderr)
+            raise
+
+        return np.frombuffer(out, np.float32)   
+
+
+
+def read_json_dataroom(url):
+    r = requests.get(url)
+    
+    return r.json()
+
+def getruns4compet(compet):
+    base = "https://dataroom.liris.cnrs.fr/vizvid_json/pipeline-tracking/"
+    data = read_json_dataroom(base + compet)
+
+    return [d["name"] for d in data if d['type'] == "directory" and d["name"][:3] == "202"]
 if __name__ == "__main__":
     
+    
+    video_path1 = '2021_CF_Montpellier_freestyle_hommes_50_FinaleC_fixeDroite.mp4'#debut du siflet à 00:06
+    video_path2 = '2021_CF_Montpellier_freestyle_hommes_50_FinaleC_fixeGauche.mp4'#debut du sifflet à 00:04
+    print(synchro_videos(video_path1,video_path2))
+
+    """
     video_path ='./data_videos/2021_CF_Montpellier/2021_CF_Montpellier_freestyle_hommes_50_FinaleA/2021_CF_Montpellier_freestyle_hommes_50_FinaleA_fixeDroite.mp4'
     bip_ref_path="ref_bip_isolated.wav"
     print(extract_time_start2(video_path,'svm',plot_peaks = False,plot_scores = False))
+    """
     
-
     #pour entrainer les modèles de classification
     """
     list_classes = ['./data_audio/entrainement/beeps','./data_audio/entrainement/non-beeps']
     aT.extract_features_and_train(list_classes, 1.0, 1.0, aT.shortTermWindow, aT.shortTermStep, "svm", "temp", False)
     """
-    

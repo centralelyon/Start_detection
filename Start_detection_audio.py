@@ -190,7 +190,7 @@ def extract_time_start_naif(video,bip_ref_path="ref_bip_isolated.wav"):
     
     return(np.argmax(np.absolute(signal))/fs)
     
-def synchro_videos(video_path1,video_path2):#calcul le retard de video1 sur video2
+def synchro_videos(video_path1,video_path2):#T_buzzer_ 1 -T_buzzer_2 = syncho_videos(video1,video2)
     fs = 44100
     
     audioclip1 = mp.AudioFileClip(video_path1)
@@ -223,7 +223,7 @@ def fenetres(signali, s_ref, filtrage = True,fs = 44100,plot_peaks = False):
     intercorr = cp.correlate(signal,cp.array(s_ref))
     intercorr = intercorr/cp.std(intercorr)#on normalise pour pouvoir définir un seuil qui fait sens
     intercorr = intercorr.get()
-    peaks,_ = find_peaks(intercorr,threshold = 0.01,distance = len(s_ref))#c'est le coeur de l'algorithme, il faut choisir les bons paramètres pour prendre les bons pics, pour l'instant on pren dune distance de la longueur de s_ref, car on ne veut pas tous les pics mais le plus gros qui correspond au signal du départ
+    peaks,_ = find_peaks(intercorr,threshold = 0.008,distance = len(s_ref))#c'est le coeur de l'algorithme, il faut choisir les bons paramètres pour prendre les bons pics, pour l'instant on pren dune distance de la longueur de s_ref, car on ne veut pas tous les pics mais le plus gros qui correspond au signal du départ
     #Il vaut mieux prendre bcp de pics que pas assez. Le départ doit toujours être pris par la détection de pics. L'algorithme de classification fera le tri plus tard
     if plot_peaks:
     
@@ -299,16 +299,16 @@ def getruns4compet(compet):
     return [d["name"] for d in data if d['type'] == "directory" and d["name"][:3] == "202"]
 if __name__ == "__main__":
     
-    
+    """
     video_path1 = '2021_CF_Montpellier_freestyle_hommes_50_FinaleC_fixeDroite.mp4'#debut du siflet à 00:06
     video_path2 = '2021_CF_Montpellier_freestyle_hommes_50_FinaleC_fixeGauche.mp4'#debut du sifflet à 00:04
     print(synchro_videos(video_path1,video_path2))
-
     """
-    video_path ='./data_videos/2021_CF_Montpellier/2021_CF_Montpellier_freestyle_hommes_50_FinaleA/2021_CF_Montpellier_freestyle_hommes_50_FinaleA_fixeDroite.mp4'
+    
+    video_path ='2022_CF_Limoges_papillon_hommes_200_finaleA_fixeDroite.mp4'
     bip_ref_path="ref_bip_isolated.wav"
-    print(extract_time_start2(video_path,'svm',plot_peaks = False,plot_scores = False))
-    """
+    print(extract_time_start2(video_path,'svm_rbf',plot_peaks = True,plot_scores = True))
+    
     
     #pour entrainer les modèles de classification
     """
